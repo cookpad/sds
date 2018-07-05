@@ -10,8 +10,8 @@ Envoy's v1 Service Discovery Service API. In contrast of https://github.com/lyft
 - PORT: the listen port
 
 ## Createing DynamoDB table
-- create with PK: `service` as String and `ip_port` as String
-- set TTL setting using `expire_time` key
+- Create with PK: `service` as String and `ip_port` as String
+- Set TTL setting using `expire_time` key
 
 ## IAM permissions
 - DynamoDB's `query`, `put_item`, `delete_item`
