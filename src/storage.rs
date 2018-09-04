@@ -225,9 +225,11 @@ fn convert_domain_tag_to_ddb_tag(tag: Tag) -> HashMap<String, AttributeValue> {
     v.bool = Some(tag.canary);
     map.insert("canary".to_owned(), v);
 
-    if tag.load_balancing_weight.is_some() {
-        let mut v: AttributeValue = Default::default();
-        v.n = tag.load_balancing_weight.map(|v| v.to_string());
+    if let Some(weight) = tag.load_balancing_weight {
+        let v = AttributeValue {
+            n: Some(weight.to_string()),
+            ..Default::default()
+        };
         map.insert("load_balancing_weight".to_owned(), v);
     }
 
