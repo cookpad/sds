@@ -224,6 +224,13 @@ fn convert_domain_tag_to_ddb_tag(tag: Tag) -> HashMap<String, AttributeValue> {
     let mut v: AttributeValue = Default::default();
     v.bool = Some(tag.canary);
     map.insert("canary".to_owned(), v);
+
+    if tag.load_balancing_weight.is_some() {
+        let mut v: AttributeValue = Default::default();
+        v.n = tag.load_balancing_weight.map(|v| v.to_string());
+        map.insert("load_balancing_weight".to_owned(), v);
+    }
+
     map
 }
 
@@ -283,6 +290,7 @@ fn convert_ddb_tags_to_domain_tag(
         region: extract_string(&mut tag_map, "region")?,
         instance_id: extract_string(&mut tag_map, "instance_id")?,
         canary: extract_bool(&mut tag_map, "canary")?,
+        load_balancing_weight: extract_u8(&mut tag_map, "load_balancing_weight")?,
     })
 }
 
@@ -336,6 +344,22 @@ fn extract_map(
     match v.m {
         Some(map) => Ok(map),
         None => build_data_error(format!("Key \"{}\" is expected to be a Map but is not", k)),
+    }
+}
+
+fn extract_u8(
+    m: &mut HashMap<String, AttributeValue>,
+    k: &str,
+) -> Result<Option<u8>, StorageError> {
+    match m.remove(k).and_then(|v| v.n) {
+        Some(s) => match s.parse() {
+            Ok(u) => Ok(Some(u)),
+            Err(_e) => build_data_error(format!(
+                "Key \"{}\" is expected to be a Number (u8) value but is not: {}",
+                k, s,
+            )),
+        },
+        None => Ok(None),
     }
 }
 
