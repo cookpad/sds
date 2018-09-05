@@ -40,4 +40,5 @@ pub struct Tag {
     pub region: String,
     pub instance_id: String,
     pub canary: bool,
+    pub load_balancing_weight: Option<u8>,
 }

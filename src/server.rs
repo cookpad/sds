@@ -143,7 +143,8 @@ fn get_registration<S: Storage>(s: S, _: Request<Body>, name: ServiceName) -> Bo
 
 fn register_hosts<S: Storage>(s: S, req: Request<Body>, name: ServiceName) -> BoxFut {
     let st = s.clone();
-    let f = req.into_body()
+    let f = req
+        .into_body()
         .concat2()
         .map(move |buffer| match str::from_utf8(&buffer) {
             Ok(body) => match serde_json::from_str::<RegistrationParam>(&body) {
