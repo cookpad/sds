@@ -40,5 +40,6 @@ pub struct Tag {
     pub region: String,
     pub instance_id: String,
     pub canary: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub load_balancing_weight: Option<u8>,
 }
