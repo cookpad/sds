@@ -23,6 +23,19 @@ struct RegistrationParam {
     tags: Tag,
 }
 
+#[derive(Serialize, Debug)]
+struct ErrorResponse {
+    // Machine readable error code.
+    id: ErrorId,
+    // Error description for human.
+    reason: String,
+}
+
+#[derive(Serialize, Debug)]
+enum ErrorId {
+    HostNotFound,
+}
+
 pub fn run<S: Storage>(c: Config, s: S) {
     // XXX: ipv4 only
     let addr = ([0, 0, 0, 0], c.listen_port).into();
@@ -185,7 +198,15 @@ fn delete_host<S: Storage>(s: S, name: ServiceName, ip: String, port_string: Str
 
     match s.get_item(&name, &ip, &port) {
         Ok(res) => if let None = res {
-            return res_400("Not found the entry".to_owned());
+            let r = ErrorResponse {
+                id: ErrorId::HostNotFound,
+                reason: "Not found the entry".to_owned(),
+            };
+            let body = match serde_json::to_string(&r) {
+                Ok(v) => v,
+                Err(e) => return res_500(e.to_string()),
+            };
+            return res_400(body);
         },
         Err(e) => return res_500(e.to_string()),
     }
