@@ -196,7 +196,7 @@ fn delete_host<S: Storage>(s: S, name: ServiceName, ip: String, port_string: Str
         Err(_e) => return res_400(format!("Given port is invalid as integer: {}", port_string)),
     };
 
-    match s.get_item(&name, &ip, &port) {
+    match s.delete_item(name, ip, port) {
         Ok(res) => if let None = res {
             let r = ErrorResponse {
                 id: ErrorId::HostNotFound,
@@ -211,9 +211,6 @@ fn delete_host<S: Storage>(s: S, name: ServiceName, ip: String, port_string: Str
         Err(e) => return res_500(e.to_string()),
     }
 
-    if let Err(e) = s.delete_item(name, ip, port) {
-        return res_500(e.to_string());
-    }
     info!("Build 202 response");
     wrap_future(
         Response::builder()

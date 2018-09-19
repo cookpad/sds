@@ -5,8 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusoto_core::region;
 use rusoto_dynamodb::{
-    AttributeValue, DeleteItemInput, DynamoDb, DynamoDbClient, GetItemInput, PutItemInput,
-    QueryInput,
+    AttributeValue, DeleteItemInput, DynamoDb, DynamoDbClient, PutItemInput, QueryInput,
 };
 
 use types::{Host, ServiceName, Storage, Tag};
@@ -100,46 +99,6 @@ impl Storage for StorageImpl {
         Ok(hosts)
     }
 
-    fn get_item(
-        &self,
-        name: &ServiceName,
-        ip: &String,
-        port: &u64,
-    ) -> Result<Option<Host>, Self::E> {
-        let client = DynamoDbClient::simple(aws_region());
-        let table_name = self.table_name.to_owned();
-        let get_item_input = build_get_item_input(table_name, &name, ip, port);
-        let res = match client.get_item(&get_item_input).sync() {
-            Ok(res) => res,
-            Err(e) => {
-                return Err(StorageError {
-                    kind: ErrorKind::ApiError,
-                    msg: format!("API Error in query: {}", e.to_string()),
-                })
-            }
-        };
-        let item = match res.item {
-            Some(item) => item,
-            None => return Ok(None),
-        };
-        let host = convert_ddb_host_to_domain_host(&name, item)?;
-
-        let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(v) => v,
-            Err(_) => {
-                return Err(StorageError {
-                    kind: ErrorKind::SystemError,
-                    msg: "Cloud not fetch system time".to_owned(),
-                })
-            }
-        };
-        if host.expire_time >= now.as_secs() {
-            return Ok(Some(host));
-        } else {
-            return Ok(None);
-        }
-    }
-
     fn store_item(&self, name: ServiceName, host: Host) -> Result<(), Self::E> {
         let client = DynamoDbClient::simple(aws_region());
         let table_name = self.table_name.to_owned();
@@ -163,11 +122,16 @@ impl Storage for StorageImpl {
         }
     }
 
-    fn delete_item(&self, name: ServiceName, ip: String, port: u64) -> Result<(), Self::E> {
+    fn delete_item(
+        &self,
+        name: ServiceName,
+        ip: String,
+        port: u64,
+    ) -> Result<Option<Host>, Self::E> {
         let client = DynamoDbClient::simple(aws_region());
         let table_name = self.table_name.to_owned();
 
-        if let Err(e) = client
+        match client
             .delete_item(&build_delete_item_input(
                 table_name,
                 &name,
@@ -176,16 +140,38 @@ impl Storage for StorageImpl {
             ))
             .sync()
         {
-            Err(StorageError {
-                kind: ErrorKind::ApiError,
-                msg: format!("API Error in delete_item: {}", e.to_string()),
-            })
-        } else {
-            info!(
-                "delete_item(): succeed to delete_item item: service={}, ip={}, port={}",
-                name, ip, port
-            );
-            Ok(())
+            Ok(out) => {
+                info!(
+                    "delete_item(): succeed to delete_item item: service={}, ip={}, port={}",
+                    name, ip, port
+                );
+                match out.attributes {
+                    Some(m) => {
+                        let h = convert_ddb_host_to_domain_host(&name, m)?;
+                        let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                            Ok(v) => v,
+                            Err(_) => {
+                                return Err(StorageError {
+                                    kind: ErrorKind::SystemError,
+                                    msg: "Cloud not fetch system time".to_owned(),
+                                })
+                            }
+                        };
+                        if h.expire_time >= now.as_secs() {
+                            return Ok(Some(h));
+                        } else {
+                            return Ok(None);
+                        }
+                    }
+                    None => return Ok(None),
+                }
+            }
+            Err(e) => {
+                return Err(StorageError {
+                    kind: ErrorKind::ApiError,
+                    msg: format!("API Error in delete_item: {}", e.to_string()),
+                })
+            }
         }
     }
 
@@ -205,22 +191,6 @@ fn build_query_input(table_name: String, name: &ServiceName) -> QueryInput {
     query_input.expression_attribute_values = Some(expression_attribute_values);
     query_input.key_condition_expression = Some("service = :service_val".to_owned());
     query_input
-}
-
-fn build_get_item_input(
-    table_name: String,
-    name: &ServiceName,
-    ip: &String,
-    port: &u64,
-) -> GetItemInput {
-    let mut get_item_input: GetItemInput = Default::default();
-    get_item_input.table_name = table_name;
-    let mut pk = HashMap::new();
-    pk.insert("service".to_owned(), build_string_attr(name.to_owned()));
-    let ip_and_port = format!("{}:{}", ip, port);
-    pk.insert("ip_port".to_owned(), build_string_attr(ip_and_port));
-    get_item_input.key = pk;
-    get_item_input
 }
 
 fn build_put_item_input(table_name: String, name: &ServiceName, host: Host) -> PutItemInput {
@@ -243,6 +213,7 @@ fn build_delete_item_input(
     let ip_and_port = format!("{}:{}", ip, port);
     pk.insert("ip_port".to_owned(), build_string_attr(ip_and_port));
     delete_item_input.key = pk;
+    delete_item_input.return_values = Some("ALL_OLD".to_owned());
     delete_item_input
 }
 
