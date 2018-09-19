@@ -183,6 +183,13 @@ fn delete_host<S: Storage>(s: S, name: ServiceName, ip: String, port_string: Str
         Err(_e) => return res_400(format!("Given port is invalid as integer: {}", port_string)),
     };
 
+    match s.get_item(&name, &ip, &port) {
+        Ok(res) => if let None = res {
+            return res_400("Not found the entry".to_owned());
+        },
+        Err(e) => return res_500(e.to_string()),
+    }
+
     if let Err(e) = s.delete_item(name, ip, port) {
         return res_500(e.to_string());
     }
@@ -226,7 +233,7 @@ fn check_health(_: Request<Body>) -> BoxFut {
 }
 
 fn build_400(msg: String) -> Response<Body> {
-    info!("Build 404 response");
+    info!("Build 400 response");
     Response::builder()
         .status(StatusCode::BAD_REQUEST)
         .body(Body::from(msg))
