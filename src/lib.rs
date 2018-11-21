@@ -14,7 +14,9 @@ extern crate rusoto_core;
 extern crate rusoto_dynamodb;
 extern crate serde;
 extern crate serde_json;
+extern crate uuid;
 
 pub mod server;
 pub mod storage;
 pub mod types;
+pub mod v2xds;

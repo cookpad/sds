@@ -10,8 +10,13 @@ use hyper::Server;
 use hyper::{Body, Method, Request, Response, StatusCode};
 use regex::Regex;
 use serde_json;
+use uuid::Uuid;
 
 use types::{Config, Host, Registration, ServiceName, Storage, Tag};
+use v2xds::{
+    hosts_to_locality_lb_endpoints, ClusterLoadAssignment, DiscoveryRequest, EdsDiscoveryResponse,
+    EDS_TYPE_URL,
+};
 
 type BoxFut = Box<Future<Item = Response<Body>, Error = hyper::Error> + Send>;
 
@@ -95,6 +100,7 @@ fn route_post_req<S: Storage>(s: S, req: Request<Body>) -> BoxFut {
     match uri.path() {
         "/" => show_usage(req),
         "/hc" => check_health(req),
+        "/v2/discovery:endpoints" => get_registration_v2(s, req),
         _ => match RE.captures(uri.path()) {
             Some(caps) => match caps.get(1) {
                 Some(m) => return register_hosts(s, req, m.as_str().to_string()),
@@ -152,6 +158,52 @@ fn get_registration<S: Storage>(s: S, _: Request<Body>, name: ServiceName) -> Bo
     };
     info!("Build 200 response: body-size={}", body.len());
     wrap_future(Response::new(Body::from(body)))
+}
+
+fn get_registration_v2<S: Storage>(s: S, req: Request<Body>) -> BoxFut {
+    let st = s.clone();
+    let f = req
+        .into_body()
+        .concat2()
+        .map(move |buffer| match str::from_utf8(&buffer) {
+            Ok(body) => match serde_json::from_str::<DiscoveryRequest>(&body) {
+                Ok(d_req) => {
+                    let mut resources = Vec::new();
+                    for name in &d_req.resource_names {
+                        let hosts = match st.query_items(&name) {
+                            Ok(v) => v,
+                            Err(e) => return build_500(e.to_string()),
+                        };
+                        let lle_vec = hosts_to_locality_lb_endpoints(hosts);
+                        resources.push(ClusterLoadAssignment {
+                            type_url: EDS_TYPE_URL.to_string(),
+                            cluster_name: name.to_owned(),
+                            endpoints: lle_vec,
+                        });
+                    }
+
+                    let d_res = EdsDiscoveryResponse {
+                        version_info: Uuid::new_v4().to_string(),
+                        resources: resources,
+                    };
+                    let body = match serde_json::to_string(&d_res) {
+                        Ok(v) => v,
+                        Err(e) => return build_500(e.to_string()),
+                    };
+                    info!("Build 200 response: body-size={}", body.len());
+                    Response::new(Body::from(body))
+                }
+                Err(m) => {
+                    let mut msg = "Invalid JSON string: ".to_owned();
+                    msg.push_str(&m.to_string());
+                    debug!("invalid json: {:?}", msg);
+                    debug!("invalid request: {:?}", body);
+                    build_400(msg)
+                }
+            },
+            Err(_) => build_400("Invalid UTF-8 string".to_owned()),
+        });
+    Box::new(f)
 }
 
 fn register_hosts<S: Storage>(s: S, req: Request<Body>, name: ServiceName) -> BoxFut {
