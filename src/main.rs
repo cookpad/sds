@@ -20,10 +20,12 @@ fn main() {
         parse_uint(v)
     };
     let table_name = fetch_env_var("DDB_TABLE");
+    let dynamodb_client = rusoto_dynamodb::DynamoDbClient::new(Default::default());
 
-    let storage: StorageImpl = StorageImpl {
+    let storage = StorageImpl {
         table_name: table_name,
         ttl: ttl,
+        dynamodb_client: dynamodb_client,
     };
     let c = Config {
         listen_port: listen_port,
