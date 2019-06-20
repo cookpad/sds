@@ -3,7 +3,6 @@ use std::error;
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusoto_core::region;
 use rusoto_dynamodb::{
     AttributeValue, DeleteItemInput, DynamoDb, DynamoDbClient, PutItemInput, QueryInput,
 };
@@ -46,7 +45,7 @@ impl Storage for StorageImpl {
     type E = StorageError;
 
     fn query_items(&self, name: &ServiceName) -> Result<Vec<Host>, Self::E> {
-        let client = DynamoDbClient::simple(aws_region());
+        let client = DynamoDbClient::new(Default::default());
         let mut hosts = Vec::new();
         let mut last_evaluated_key: Option<HashMap<String, AttributeValue>> = None;
         let table_name = self.table_name.to_owned();
@@ -65,7 +64,7 @@ impl Storage for StorageImpl {
             let tn = table_name.to_owned();
             let mut query_input = build_query_input(tn, &name);
             query_input.exclusive_start_key = last_evaluated_key;
-            let res = match client.query(&query_input).sync() {
+            let res = match client.query(query_input).sync() {
                 Ok(res) => res,
                 Err(e) => {
                     return Err(StorageError {
@@ -100,13 +99,13 @@ impl Storage for StorageImpl {
     }
 
     fn store_item(&self, name: ServiceName, host: Host) -> Result<(), Self::E> {
-        let client = DynamoDbClient::simple(aws_region());
+        let client = DynamoDbClient::new(Default::default());
         let table_name = self.table_name.to_owned();
         let ip = host.ip_address.to_owned();
         let port = host.port.clone();
 
         if let Err(e) = client
-            .put_item(&build_put_item_input(table_name, &name, host))
+            .put_item(build_put_item_input(table_name, &name, host))
             .sync()
         {
             Err(StorageError {
@@ -128,11 +127,11 @@ impl Storage for StorageImpl {
         ip: String,
         port: u64,
     ) -> Result<Option<Host>, Self::E> {
-        let client = DynamoDbClient::simple(aws_region());
+        let client = DynamoDbClient::new(Default::default());
         let table_name = self.table_name.to_owned();
 
         match client
-            .delete_item(&build_delete_item_input(
+            .delete_item(build_delete_item_input(
                 table_name,
                 &name,
                 ip.to_owned(),
@@ -215,11 +214,6 @@ fn build_delete_item_input(
     delete_item_input.key = pk;
     delete_item_input.return_values = Some("ALL_OLD".to_owned());
     delete_item_input
-}
-
-// rusoto refer AWS_DEFAULT_REGION env by default.
-fn aws_region() -> region::Region {
-    Default::default()
 }
 
 fn convert_domain_host_to_ddb_host(
