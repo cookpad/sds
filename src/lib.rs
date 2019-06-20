@@ -10,7 +10,6 @@ extern crate env_logger;
 extern crate futures;
 extern crate hyper;
 extern crate regex;
-extern crate rusoto_core;
 extern crate rusoto_dynamodb;
 extern crate serde;
 extern crate serde_json;
