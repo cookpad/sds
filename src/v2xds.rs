@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use serde_derive::{Deserialize, Serialize};
 use serde_json;
 
 use super::types::Host;

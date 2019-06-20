@@ -1,11 +1,7 @@
+use log::error;
 use std::env;
 use std::process::exit;
 use std::str;
-
-#[macro_use]
-extern crate log;
-extern crate env_logger;
-extern crate sds;
 
 use sds::storage::StorageImpl;
 use sds::types::Config;

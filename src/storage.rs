@@ -3,6 +3,7 @@ use std::error;
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use log::info;
 use rusoto_dynamodb::{
     AttributeValue, DeleteItemInput, DynamoDb, DynamoDbClient, PutItemInput, QueryInput,
 };
