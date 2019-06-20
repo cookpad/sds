@@ -12,8 +12,8 @@ use regex::Regex;
 use serde_json;
 use uuid::Uuid;
 
-use types::{Config, Host, Registration, ServiceName, Storage, Tag};
-use v2xds::{
+use super::types::{Config, Host, Registration, ServiceName, Storage, Tag};
+use super::v2xds::{
     hosts_to_locality_lb_endpoints, ClusterLoadAssignment, DiscoveryRequest, EdsDiscoveryResponse,
     EDS_TYPE_URL,
 };
@@ -249,17 +249,19 @@ fn delete_host<S: Storage>(s: S, name: ServiceName, ip: String, port_string: Str
     };
 
     match s.delete_item(name, ip, port) {
-        Ok(res) => if let None = res {
-            let r = ErrorResponse {
-                id: ErrorId::HostNotFound,
-                reason: "Not found the entry".to_owned(),
-            };
-            let body = match serde_json::to_string(&r) {
-                Ok(v) => v,
-                Err(e) => return res_500(e.to_string()),
-            };
-            return res_400(body);
-        },
+        Ok(res) => {
+            if let None = res {
+                let r = ErrorResponse {
+                    id: ErrorId::HostNotFound,
+                    reason: "Not found the entry".to_owned(),
+                };
+                let body = match serde_json::to_string(&r) {
+                    Ok(v) => v,
+                    Err(e) => return res_500(e.to_string()),
+                };
+                return res_400(body);
+            }
+        }
         Err(e) => return res_500(e.to_string()),
     }
 

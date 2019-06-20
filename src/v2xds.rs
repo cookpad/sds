@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde_json;
 
-use types::Host;
+use super::types::Host;
 
 pub const EDS_TYPE_URL: &'static str = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment";
 
@@ -99,7 +99,7 @@ pub fn hosts_to_locality_lb_endpoints(mut hosts: Vec<Host>) -> Vec<LocalityLbEnd
         let le = convert_host_to_le(h);
 
         if lle_map.contains_key(&locality) {
-            let mut le_vec = lle_map.get_mut(&locality).expect("map key error");
+            let le_vec = lle_map.get_mut(&locality).expect("map key error");
             le_vec.push(le);
         } else {
             let le_vec = vec![le];

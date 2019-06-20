@@ -1,4 +1,4 @@
-FROM rust:1.27-stretch as builder
+FROM rust:1.35-stretch as builder
 
 # Build deps
 RUN mkdir -p /build/src

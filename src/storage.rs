@@ -7,7 +7,7 @@ use rusoto_dynamodb::{
     AttributeValue, DeleteItemInput, DynamoDb, DynamoDbClient, PutItemInput, QueryInput,
 };
 
-use types::{Host, ServiceName, Storage, Tag};
+use super::types::{Host, ServiceName, Storage, Tag};
 
 #[derive(Debug, Clone)]
 enum ErrorKind {
@@ -75,7 +75,7 @@ impl Storage for StorageImpl {
             };
             last_evaluated_key = res.last_evaluated_key;
             let items = res.items.expect("items of query result is missing");
-            for mut h in items {
+            for h in items {
                 let host = convert_ddb_host_to_domain_host(&name, h)?;
                 if host.expire_time >= epoch_now {
                     hosts.push(host);
