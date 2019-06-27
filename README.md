@@ -57,6 +57,8 @@ the entry not found:
 - DDB_TABLE: DynamoDB's table name
 - HOST_TTL: the TTL of the DynamoDB's entries
 - PORT: the listen port
+- CORE_THREADS: the maximum number of worker threads
+  - See https://docs.rs/tokio/0.1/tokio/runtime/struct.Builder.html#method.core_threads
 
 ## Createing DynamoDB table
 - Create with PK: `service` as String and `ip_port` as String

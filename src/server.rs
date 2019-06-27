@@ -58,7 +58,29 @@ pub fn run<S: Storage>(c: Config, s: S) {
         .serve(new_service)
         .map_err(|e| error!("server error: {}", e));
     info!("Listening on {}", addr);
-    hyper::rt::run(server);
+    let mut builder = tokio::runtime::Builder::new();
+    if let Some(num) = get_core_threads() {
+        log::info!("Set core_threads to {}", num);
+        builder.core_threads(num);
+    }
+    let mut entered = tokio_executor::enter().expect("nested tokio::run");
+    let mut runtime = builder.build().expect("failed to start new Runtime");
+    runtime.spawn(server);
+    entered
+        .block_on(runtime.shutdown_on_idle())
+        .expect("shutdown cannot error");
+}
+
+fn get_core_threads() -> Option<usize> {
+    std::env::var("CORE_THREADS")
+        .ok()
+        .and_then(|core_threads| match core_threads.parse() {
+            Ok(num) => Some(num),
+            Err(e) => {
+                log::warn!("unable to parse CORE_THREADS into usize: {}", e);
+                None
+            }
+        })
 }
 
 fn route<S: Storage>(s: S, req: Request<Body>) -> BoxFut {
