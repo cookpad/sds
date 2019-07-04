@@ -10,9 +10,9 @@ use super::types::{Host, Storage, Tag};
 
 #[derive(Debug, Clone)]
 enum ErrorKind {
-    ApiError,
-    DataError,
-    SystemError,
+    Api,
+    Data,
+    System,
 }
 
 #[derive(Debug, Clone)]
@@ -56,7 +56,7 @@ where
             Ok(v) => v,
             Err(_) => {
                 return Err(StorageError {
-                    kind: ErrorKind::SystemError,
+                    kind: ErrorKind::System,
                     msg: "Cloud not fetch system time".to_owned(),
                 })
             }
@@ -76,7 +76,7 @@ where
                 Ok(res) => res,
                 Err(e) => {
                     return Err(StorageError {
-                        kind: ErrorKind::ApiError,
+                        kind: ErrorKind::Api,
                         msg: format!("API Error in query: {}", e.to_string()),
                     })
                 }
@@ -118,7 +118,7 @@ where
             .sync()
         {
             Err(StorageError {
-                kind: ErrorKind::ApiError,
+                kind: ErrorKind::Api,
                 msg: format!("API Error in put_item: {}", e.to_string()),
             })
         } else {
@@ -151,7 +151,7 @@ where
                             Ok(v) => v,
                             Err(_) => {
                                 return Err(StorageError {
-                                    kind: ErrorKind::SystemError,
+                                    kind: ErrorKind::System,
                                     msg: "Cloud not fetch system time".to_owned(),
                                 })
                             }
@@ -166,7 +166,7 @@ where
                 }
             }
             Err(e) => Err(StorageError {
-                kind: ErrorKind::ApiError,
+                kind: ErrorKind::Api,
                 msg: format!("API Error in delete_item: {}", e.to_string()),
             }),
         }
@@ -291,7 +291,7 @@ fn convert_ddb_host_to_domain_host(
 
 fn build_data_error(msg: String) -> StorageError {
     StorageError {
-        kind: ErrorKind::DataError,
+        kind: ErrorKind::Data,
         msg,
     }
 }
