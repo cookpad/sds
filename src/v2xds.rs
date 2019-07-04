@@ -129,9 +129,7 @@ fn convert_host_to_le(h: Host) -> LbEndpoint {
 
     LbEndpoint {
         load_balancing_weight: h.tags.load_balancing_weight,
-        metadata: Metadata {
-            filter_metadata: filter_metadata,
-        },
+        metadata: Metadata { filter_metadata },
         endpoint: Endpoint {
             address: Address {
                 socket_address: SocketAddress {

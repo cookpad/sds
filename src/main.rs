@@ -23,14 +23,12 @@ fn main() {
     let dynamodb_client = rusoto_dynamodb::DynamoDbClient::new(Default::default());
 
     let storage = StorageImpl {
-        table_name: table_name,
-        ttl: ttl,
-        dynamodb_client: dynamodb_client,
+        table_name,
+        ttl,
+        dynamodb_client,
         timeout: get_timeout(),
     };
-    let c = Config {
-        listen_port: listen_port,
-    };
+    let c = Config { listen_port };
     sds::server::run(c, storage);
 }
 

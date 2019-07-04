@@ -175,7 +175,7 @@ fn get_registration<S: Storage>(s: S, _: Request<Body>, name: ServiceName) -> Bo
     let registration = Registration {
         service: name,
         env: "production".to_owned(),
-        hosts: hosts,
+        hosts,
     };
     let body = match serde_json::to_string(&registration) {
         Ok(v) => v,
@@ -209,7 +209,7 @@ fn get_registration_v2<S: Storage>(s: S, req: Request<Body>) -> BoxFut {
 
                     let d_res = EdsDiscoveryResponse {
                         version_info: Uuid::new_v4().to_string(),
-                        resources: resources,
+                        resources,
                     };
                     let body = match serde_json::to_string(&d_res) {
                         Ok(v) => v,
@@ -311,8 +311,8 @@ fn convert_param_to_host(
     Ok(Host {
         ip_address: p.ip,
         port: p.port,
-        last_check_in: last_check_in,
-        expire_time: expire_time,
+        last_check_in,
+        expire_time,
         revision: p.revision,
         service: name.to_owned(),
         tags: p.tags,

@@ -300,7 +300,7 @@ fn convert_ddb_host_to_domain_host(
     };
     Ok(Host {
         ip_address: addr_and_port[0].to_string(),
-        port: port,
+        port,
         last_check_in: extract_string(&mut h, "last_check_in")?,
         expire_time: extract_number(&mut h, "expire_time")?,
         revision: extract_string(&mut h, "revision")?,
@@ -312,7 +312,7 @@ fn convert_ddb_host_to_domain_host(
 fn build_data_error<T>(msg: String) -> Result<T, StorageError> {
     Err(StorageError {
         kind: ErrorKind::DataError,
-        msg: msg,
+        msg,
     })
 }
 
