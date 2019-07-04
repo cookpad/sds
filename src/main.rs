@@ -12,26 +12,24 @@ fn main() {
 
     let listen_port = {
         let v = fetch_env_var("PORT");
-        parse_uint(v)
+        parse_uint(&v)
     };
 
     let ttl = {
         let v = fetch_env_var("HOST_TTL");
-        parse_uint(v)
+        parse_uint(&v)
     };
     let table_name = fetch_env_var("DDB_TABLE");
     let dynamodb_client = rusoto_dynamodb::DynamoDbClient::new(Default::default());
 
     let storage = StorageImpl {
-        table_name: table_name,
-        ttl: ttl,
-        dynamodb_client: dynamodb_client,
+        table_name,
+        ttl,
+        dynamodb_client,
         timeout: get_timeout(),
     };
-    let c = Config {
-        listen_port: listen_port,
-    };
-    sds::server::run(c, storage);
+    let c = Config { listen_port };
+    sds::server::run(&c, storage);
 }
 
 fn fetch_env_var(k: &'static str) -> String {
@@ -44,7 +42,7 @@ fn fetch_env_var(k: &'static str) -> String {
     }
 }
 
-fn parse_uint<T>(s: String) -> T
+fn parse_uint<T>(s: &str) -> T
 where
     T: str::FromStr,
 {

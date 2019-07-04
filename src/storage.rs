@@ -6,13 +6,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use log::info;
 use rusoto_dynamodb::{AttributeValue, DeleteItemInput, PutItemInput, QueryInput};
 
-use super::types::{Host, ServiceName, Storage, Tag};
+use super::types::{Host, Storage, Tag};
 
 #[derive(Debug, Clone)]
 enum ErrorKind {
-    ApiError,
-    DataError,
-    SystemError,
+    Api,
+    Data,
+    System,
 }
 
 #[derive(Debug, Clone)]
@@ -48,7 +48,7 @@ where
 {
     type E = StorageError;
 
-    fn query_items(&self, name: &ServiceName) -> Result<Vec<Host>, Self::E> {
+    fn query_items(&self, name: &str) -> Result<Vec<Host>, Self::E> {
         let mut hosts = Vec::new();
         let mut last_evaluated_key: Option<HashMap<String, AttributeValue>> = None;
         let table_name = self.table_name.to_owned();
@@ -56,7 +56,7 @@ where
             Ok(v) => v,
             Err(_) => {
                 return Err(StorageError {
-                    kind: ErrorKind::SystemError,
+                    kind: ErrorKind::System,
                     msg: "Cloud not fetch system time".to_owned(),
                 })
             }
@@ -76,7 +76,7 @@ where
                 Ok(res) => res,
                 Err(e) => {
                     return Err(StorageError {
-                        kind: ErrorKind::ApiError,
+                        kind: ErrorKind::Api,
                         msg: format!("API Error in query: {}", e.to_string()),
                     })
                 }
@@ -106,10 +106,10 @@ where
         Ok(hosts)
     }
 
-    fn store_item(&self, name: ServiceName, host: Host) -> Result<(), Self::E> {
+    fn store_item(&self, name: &str, host: Host) -> Result<(), Self::E> {
         let table_name = self.table_name.to_owned();
         let ip = host.ip_address.to_owned();
-        let port = host.port.clone();
+        let port = host.port;
 
         if let Err(e) = self
             .dynamodb_client
@@ -118,7 +118,7 @@ where
             .sync()
         {
             Err(StorageError {
-                kind: ErrorKind::ApiError,
+                kind: ErrorKind::Api,
                 msg: format!("API Error in put_item: {}", e.to_string()),
             })
         } else {
@@ -130,22 +130,12 @@ where
         }
     }
 
-    fn delete_item(
-        &self,
-        name: ServiceName,
-        ip: String,
-        port: u64,
-    ) -> Result<Option<Host>, Self::E> {
+    fn delete_item(&self, name: &str, ip: String, port: u64) -> Result<Option<Host>, Self::E> {
         let table_name = self.table_name.to_owned();
 
         match self
             .dynamodb_client
-            .delete_item(build_delete_item_input(
-                table_name,
-                &name,
-                ip.to_owned(),
-                port.clone(),
-            ))
+            .delete_item(build_delete_item_input(table_name, name, &ip, port))
             .with_timeout(self.timeout)
             .sync()
         {
@@ -156,31 +146,29 @@ where
                 );
                 match out.attributes {
                     Some(m) => {
-                        let h = convert_ddb_host_to_domain_host(&name, m)?;
+                        let h = convert_ddb_host_to_domain_host(name, m)?;
                         let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
                             Ok(v) => v,
                             Err(_) => {
                                 return Err(StorageError {
-                                    kind: ErrorKind::SystemError,
+                                    kind: ErrorKind::System,
                                     msg: "Cloud not fetch system time".to_owned(),
                                 })
                             }
                         };
                         if h.expire_time >= now.as_secs() {
-                            return Ok(Some(h));
+                            Ok(Some(h))
                         } else {
-                            return Ok(None);
+                            Ok(None)
                         }
                     }
-                    None => return Ok(None),
+                    None => Ok(None),
                 }
             }
-            Err(e) => {
-                return Err(StorageError {
-                    kind: ErrorKind::ApiError,
-                    msg: format!("API Error in delete_item: {}", e.to_string()),
-                })
-            }
+            Err(e) => Err(StorageError {
+                kind: ErrorKind::Api,
+                msg: format!("API Error in delete_item: {}", e.to_string()),
+            }),
         }
     }
 
@@ -189,7 +177,7 @@ where
     }
 }
 
-fn build_query_input(table_name: String, name: &ServiceName) -> QueryInput {
+fn build_query_input(table_name: String, name: &str) -> QueryInput {
     let mut attr_service: AttributeValue = Default::default();
     attr_service.s = Some(name.to_owned());
     let mut expression_attribute_values: HashMap<String, AttributeValue> = HashMap::new();
@@ -202,19 +190,14 @@ fn build_query_input(table_name: String, name: &ServiceName) -> QueryInput {
     query_input
 }
 
-fn build_put_item_input(table_name: String, name: &ServiceName, host: Host) -> PutItemInput {
+fn build_put_item_input(table_name: String, name: &str, host: Host) -> PutItemInput {
     let mut put_item_input: PutItemInput = Default::default();
     put_item_input.table_name = table_name;
     put_item_input.item = convert_domain_host_to_ddb_host(&name, host);
     put_item_input
 }
 
-fn build_delete_item_input(
-    table_name: String,
-    name: &ServiceName,
-    ip: String,
-    port: u64,
-) -> DeleteItemInput {
+fn build_delete_item_input(table_name: String, name: &str, ip: &str, port: u64) -> DeleteItemInput {
     let mut delete_item_input: DeleteItemInput = Default::default();
     delete_item_input.table_name = table_name;
     let mut pk = HashMap::new();
@@ -226,10 +209,7 @@ fn build_delete_item_input(
     delete_item_input
 }
 
-fn convert_domain_host_to_ddb_host(
-    name: &ServiceName,
-    host: Host,
-) -> HashMap<String, AttributeValue> {
+fn convert_domain_host_to_ddb_host(name: &str, host: Host) -> HashMap<String, AttributeValue> {
     let mut map = HashMap::new();
     map.insert("service".to_owned(), build_string_attr(name.to_owned()));
     let ip_port = format!("{}:{}", host.ip_address, host.port);
@@ -275,7 +255,7 @@ fn build_string_attr(s: String) -> AttributeValue {
 }
 
 fn convert_ddb_host_to_domain_host(
-    name: &String,
+    name: &str,
     mut h: HashMap<String, AttributeValue>,
 ) -> Result<Host, StorageError> {
     let tag = convert_ddb_tags_to_domain_tag(extract_map(&mut h, "tags")?)?;
@@ -283,24 +263,24 @@ fn convert_ddb_host_to_domain_host(
     let addr_and_port_string = extract_string(&mut h, "ip_port")?;
     let addr_and_port: Vec<&str> = addr_and_port_string.split(':').collect();
     if addr_and_port.len() != 2 {
-        return build_data_error(format!(
+        return Err(build_data_error(format!(
             "\"{}\" must be formated with colon like \"ip:port\"",
             addr_and_port_string
-        ));
+        )));
     }
     let port_string = addr_and_port[1].to_string();
     let port = match port_string.parse() {
         Ok(v) => v,
         Err(_e) => {
-            return build_data_error(format!(
+            return Err(build_data_error(format!(
                 "port value must be a valid integer: {}",
                 port_string
-            ))
+            )))
         }
     };
     Ok(Host {
         ip_address: addr_and_port[0].to_string(),
-        port: port,
+        port,
         last_check_in: extract_string(&mut h, "last_check_in")?,
         expire_time: extract_number(&mut h, "expire_time")?,
         revision: extract_string(&mut h, "revision")?,
@@ -309,11 +289,11 @@ fn convert_ddb_host_to_domain_host(
     })
 }
 
-fn build_data_error<T>(msg: String) -> Result<T, StorageError> {
-    Err(StorageError {
-        kind: ErrorKind::DataError,
-        msg: msg,
-    })
+fn build_data_error(msg: String) -> StorageError {
+    StorageError {
+        kind: ErrorKind::Data,
+        msg,
+    }
 }
 
 fn convert_ddb_tags_to_domain_tag(
@@ -332,53 +312,48 @@ fn extract_string(
     m: &mut HashMap<String, AttributeValue>,
     k: &str,
 ) -> Result<String, StorageError> {
-    let v = extract(m, k)?;
-    match v.s {
-        Some(s) => Ok(s),
-        None => build_data_error(format!(
+    extract(m, k)?.s.ok_or_else(|| {
+        build_data_error(format!(
             "Key \"{}\" is expected to be a String but is not",
             k
-        )),
-    }
+        ))
+    })
 }
 
 fn extract_bool(m: &mut HashMap<String, AttributeValue>, k: &str) -> Result<bool, StorageError> {
-    let v = extract(m, k)?;
-    match v.bool {
-        Some(b) => Ok(b),
-        None => build_data_error(format!(
+    extract(m, k)?.bool.ok_or_else(|| {
+        build_data_error(format!(
             "Key \"{}\" is expected to be a Boolean but is not",
             k
-        )),
-    }
+        ))
+    })
 }
 
 fn extract_number(m: &mut HashMap<String, AttributeValue>, k: &str) -> Result<u64, StorageError> {
-    let v = extract(m, k)?;
-    match v.n {
-        Some(s) => match s.parse() {
+    extract(m, k)?
+        .n
+        .ok_or_else(|| {
+            build_data_error(format!(
+                "Key \"{}\" is expected to be a Number but is not",
+                k
+            ))
+        })
+        .and_then(|s| match s.parse() {
             Ok(u) => Ok(u),
-            Err(_e) => build_data_error(format!(
+            Err(_e) => Err(build_data_error(format!(
                 "Key \"{}\" is expected to be a Number (u64) value but is not: {}",
                 k, s,
-            )),
-        },
-        None => build_data_error(format!(
-            "Key \"{}\" is expected to be a Number but is not",
-            k
-        )),
-    }
+            ))),
+        })
 }
 
 fn extract_map(
     m: &mut HashMap<String, AttributeValue>,
     k: &str,
 ) -> Result<HashMap<String, AttributeValue>, StorageError> {
-    let v = extract(m, k)?;
-    match v.m {
-        Some(map) => Ok(map),
-        None => build_data_error(format!("Key \"{}\" is expected to be a Map but is not", k)),
-    }
+    extract(m, k)?.m.ok_or_else(|| {
+        build_data_error(format!("Key \"{}\" is expected to be a Map but is not", k))
+    })
 }
 
 fn extract_u8(
@@ -388,10 +363,10 @@ fn extract_u8(
     match m.remove(k).and_then(|v| v.n) {
         Some(s) => match s.parse() {
             Ok(u) => Ok(Some(u)),
-            Err(_e) => build_data_error(format!(
+            Err(_e) => Err(build_data_error(format!(
                 "Key \"{}\" is expected to be a Number (u8) value but is not: {}",
                 k, s,
-            )),
+            ))),
         },
         None => Ok(None),
     }
@@ -401,8 +376,6 @@ fn extract(
     m: &mut HashMap<String, AttributeValue>,
     k: &str,
 ) -> Result<AttributeValue, StorageError> {
-    match m.remove(k) {
-        Some(v) => Ok(v),
-        None => build_data_error(format!("Missing required value for key: {}", k)),
-    }
+    m.remove(k)
+        .ok_or_else(|| build_data_error(format!("Missing required value for key: {}", k)))
 }

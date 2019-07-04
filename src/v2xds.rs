@@ -5,7 +5,7 @@ use serde_json;
 
 use super::types::Host;
 
-pub const EDS_TYPE_URL: &'static str = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment";
+pub const EDS_TYPE_URL: &str = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DiscoveryRequest {
@@ -99,12 +99,13 @@ pub fn hosts_to_locality_lb_endpoints(mut hosts: Vec<Host>) -> Vec<LocalityLbEnd
         };
         let le = convert_host_to_le(h);
 
-        if lle_map.contains_key(&locality) {
-            let le_vec = lle_map.get_mut(&locality).expect("map key error");
-            le_vec.push(le);
-        } else {
-            let le_vec = vec![le];
-            lle_map.insert(locality, le_vec);
+        match lle_map.entry(locality) {
+            std::collections::hash_map::Entry::Vacant(e) => {
+                e.insert(vec![le]);
+            }
+            std::collections::hash_map::Entry::Occupied(mut e) => {
+                e.get_mut().push(le);
+            }
         }
     }
 
@@ -129,9 +130,7 @@ fn convert_host_to_le(h: Host) -> LbEndpoint {
 
     LbEndpoint {
         load_balancing_weight: h.tags.load_balancing_weight,
-        metadata: Metadata {
-            filter_metadata: filter_metadata,
-        },
+        metadata: Metadata { filter_metadata },
         endpoint: Endpoint {
             address: Address {
                 socket_address: SocketAddress {

@@ -2,18 +2,11 @@ use serde_derive::{Deserialize, Serialize};
 use std::error;
 use std::fmt;
 
-pub type ServiceName = String;
-
 pub trait Storage: Send + Sync + Clone + 'static {
     type E: fmt::Display + error::Error;
-    fn query_items(&self, name: &ServiceName) -> Result<Vec<Host>, Self::E>;
-    fn store_item(&self, name: ServiceName, host: Host) -> Result<(), Self::E>;
-    fn delete_item(
-        &self,
-        name: ServiceName,
-        ip: String,
-        port: u64,
-    ) -> Result<Option<Host>, Self::E>;
+    fn query_items(&self, name: &str) -> Result<Vec<Host>, Self::E>;
+    fn store_item(&self, name: &str, host: Host) -> Result<(), Self::E>;
+    fn delete_item(&self, name: &str, ip: String, port: u64) -> Result<Option<Host>, Self::E>;
     fn ttl(&self) -> u64;
 }
 
