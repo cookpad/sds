@@ -44,7 +44,7 @@ enum ErrorId {
     HostNotFound,
 }
 
-pub fn run<S: Storage>(c: Config, s: S) {
+pub fn run<S: Storage>(c: &Config, s: S) {
     // XXX: ipv4 only
     let addr = ([0, 0, 0, 0], c.listen_port).into();
     let new_service = move || {
@@ -90,14 +90,14 @@ fn route<S: Storage>(s: S, req: Request<Body>) -> BoxFut {
         req.uri().to_owned().path()
     );
     match req.method() {
-        &Method::GET => route_get_req(s, req),
+        &Method::GET => route_get_req(&s, req),
         &Method::POST => route_post_req(s, req),
-        &Method::DELETE => route_delete_req(s, req),
+        &Method::DELETE => route_delete_req(&s, req),
         _ => res_404(),
     }
 }
 
-fn route_get_req<S: Storage>(s: S, req: Request<Body>) -> BoxFut {
+fn route_get_req<S: Storage>(s: &S, req: Request<Body>) -> BoxFut {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"^/v1/registration/([^/]+)/?$").unwrap();
     }
@@ -125,7 +125,7 @@ fn route_post_req<S: Storage>(s: S, req: Request<Body>) -> BoxFut {
     match uri.path() {
         "/" => show_usage(req),
         "/hc" => check_health(req),
-        "/v2/discovery:endpoints" => get_registration_v2(s, req),
+        "/v2/discovery:endpoints" => get_registration_v2(&s, req),
         _ => match RE.captures(uri.path()) {
             Some(caps) => match caps.get(1) {
                 Some(m) => return register_hosts(s, req, m.as_str().to_string()),
@@ -136,7 +136,7 @@ fn route_post_req<S: Storage>(s: S, req: Request<Body>) -> BoxFut {
     }
 }
 
-fn route_delete_req<S: Storage>(s: S, req: Request<Body>) -> BoxFut {
+fn route_delete_req<S: Storage>(s: &S, req: Request<Body>) -> BoxFut {
     lazy_static! {
         static ref RE: Regex =
             Regex::new(r"^/v1/registration/([^/]+)/([^/:]+):([^/:]+)/?$").unwrap();
@@ -154,7 +154,7 @@ fn route_delete_req<S: Storage>(s: S, req: Request<Body>) -> BoxFut {
                             s,
                             m_service.as_str().to_string(),
                             m_ip.as_str().to_string(),
-                            m_port.as_str().to_string(),
+                            m_port.as_str(),
                         ),
                         _ => res_404(),
                     },
@@ -167,7 +167,7 @@ fn route_delete_req<S: Storage>(s: S, req: Request<Body>) -> BoxFut {
     }
 }
 
-fn get_registration<S: Storage>(s: S, _: Request<Body>, name: ServiceName) -> BoxFut {
+fn get_registration<S: Storage>(s: &S, _: Request<Body>, name: ServiceName) -> BoxFut {
     let hosts = match s.query_items(&name) {
         Ok(v) => v,
         Err(e) => return res_500(e.to_string()),
@@ -185,7 +185,7 @@ fn get_registration<S: Storage>(s: S, _: Request<Body>, name: ServiceName) -> Bo
     wrap_future(Response::new(Body::from(body)))
 }
 
-fn get_registration_v2<S: Storage>(s: S, req: Request<Body>) -> BoxFut {
+fn get_registration_v2<S: Storage>(s: &S, req: Request<Body>) -> BoxFut {
     let st = s.clone();
     let f = req
         .into_body()
@@ -267,7 +267,7 @@ fn register_hosts<S: Storage>(s: S, req: Request<Body>, name: ServiceName) -> Bo
     Box::new(f)
 }
 
-fn delete_host<S: Storage>(s: S, name: ServiceName, ip: String, port_string: String) -> BoxFut {
+fn delete_host<S: Storage>(s: &S, name: ServiceName, ip: String, port_string: &str) -> BoxFut {
     let port = match port_string.parse() {
         Ok(v) => v,
         Err(_e) => return res_400(format!("Given port is invalid as integer: {}", port_string)),

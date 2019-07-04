@@ -143,7 +143,7 @@ where
             .delete_item(build_delete_item_input(
                 table_name,
                 &name,
-                ip.to_owned(),
+                &ip,
                 port.clone(),
             ))
             .with_timeout(self.timeout)
@@ -212,7 +212,7 @@ fn build_put_item_input(table_name: String, name: &ServiceName, host: Host) -> P
 fn build_delete_item_input(
     table_name: String,
     name: &ServiceName,
-    ip: String,
+    ip: &str,
     port: u64,
 ) -> DeleteItemInput {
     let mut delete_item_input: DeleteItemInput = Default::default();
