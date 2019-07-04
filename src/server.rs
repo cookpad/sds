@@ -276,7 +276,7 @@ fn delete_host<S: Storage>(s: &S, name: &str, ip: String, port_string: &str) -> 
 
     match s.delete_item(name, ip, port) {
         Ok(res) => {
-            if let None = res {
+            if res.is_none() {
                 let r = ErrorResponse {
                     id: ErrorId::HostNotFound,
                     reason: "Not found the entry".to_owned(),
