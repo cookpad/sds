@@ -263,19 +263,19 @@ fn convert_ddb_host_to_domain_host(
     let addr_and_port_string = extract_string(&mut h, "ip_port")?;
     let addr_and_port: Vec<&str> = addr_and_port_string.split(':').collect();
     if addr_and_port.len() != 2 {
-        return build_data_error(format!(
+        return Err(build_data_error(format!(
             "\"{}\" must be formated with colon like \"ip:port\"",
             addr_and_port_string
-        ));
+        )));
     }
     let port_string = addr_and_port[1].to_string();
     let port = match port_string.parse() {
         Ok(v) => v,
         Err(_e) => {
-            return build_data_error(format!(
+            return Err(build_data_error(format!(
                 "port value must be a valid integer: {}",
                 port_string
-            ))
+            )))
         }
     };
     Ok(Host {
@@ -289,11 +289,11 @@ fn convert_ddb_host_to_domain_host(
     })
 }
 
-fn build_data_error<T>(msg: String) -> Result<T, StorageError> {
-    Err(StorageError {
+fn build_data_error(msg: String) -> StorageError {
+    StorageError {
         kind: ErrorKind::DataError,
         msg,
-    })
+    }
 }
 
 fn convert_ddb_tags_to_domain_tag(
@@ -312,53 +312,48 @@ fn extract_string(
     m: &mut HashMap<String, AttributeValue>,
     k: &str,
 ) -> Result<String, StorageError> {
-    let v = extract(m, k)?;
-    match v.s {
-        Some(s) => Ok(s),
-        None => build_data_error(format!(
+    extract(m, k)?.s.ok_or_else(|| {
+        build_data_error(format!(
             "Key \"{}\" is expected to be a String but is not",
             k
-        )),
-    }
+        ))
+    })
 }
 
 fn extract_bool(m: &mut HashMap<String, AttributeValue>, k: &str) -> Result<bool, StorageError> {
-    let v = extract(m, k)?;
-    match v.bool {
-        Some(b) => Ok(b),
-        None => build_data_error(format!(
+    extract(m, k)?.bool.ok_or_else(|| {
+        build_data_error(format!(
             "Key \"{}\" is expected to be a Boolean but is not",
             k
-        )),
-    }
+        ))
+    })
 }
 
 fn extract_number(m: &mut HashMap<String, AttributeValue>, k: &str) -> Result<u64, StorageError> {
-    let v = extract(m, k)?;
-    match v.n {
-        Some(s) => match s.parse() {
+    extract(m, k)?
+        .n
+        .ok_or_else(|| {
+            build_data_error(format!(
+                "Key \"{}\" is expected to be a Number but is not",
+                k
+            ))
+        })
+        .and_then(|s| match s.parse() {
             Ok(u) => Ok(u),
-            Err(_e) => build_data_error(format!(
+            Err(_e) => Err(build_data_error(format!(
                 "Key \"{}\" is expected to be a Number (u64) value but is not: {}",
                 k, s,
-            )),
-        },
-        None => build_data_error(format!(
-            "Key \"{}\" is expected to be a Number but is not",
-            k
-        )),
-    }
+            ))),
+        })
 }
 
 fn extract_map(
     m: &mut HashMap<String, AttributeValue>,
     k: &str,
 ) -> Result<HashMap<String, AttributeValue>, StorageError> {
-    let v = extract(m, k)?;
-    match v.m {
-        Some(map) => Ok(map),
-        None => build_data_error(format!("Key \"{}\" is expected to be a Map but is not", k)),
-    }
+    extract(m, k)?.m.ok_or_else(|| {
+        build_data_error(format!("Key \"{}\" is expected to be a Map but is not", k))
+    })
 }
 
 fn extract_u8(
@@ -368,10 +363,10 @@ fn extract_u8(
     match m.remove(k).and_then(|v| v.n) {
         Some(s) => match s.parse() {
             Ok(u) => Ok(Some(u)),
-            Err(_e) => build_data_error(format!(
+            Err(_e) => Err(build_data_error(format!(
                 "Key \"{}\" is expected to be a Number (u8) value but is not: {}",
                 k, s,
-            )),
+            ))),
         },
         None => Ok(None),
     }
@@ -381,8 +376,6 @@ fn extract(
     m: &mut HashMap<String, AttributeValue>,
     k: &str,
 ) -> Result<AttributeValue, StorageError> {
-    match m.remove(k) {
-        Some(v) => Ok(v),
-        None => build_data_error(format!("Missing required value for key: {}", k)),
-    }
+    m.remove(k)
+        .ok_or_else(|| build_data_error(format!("Missing required value for key: {}", k)))
 }
