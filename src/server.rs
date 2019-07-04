@@ -128,7 +128,7 @@ fn route_post_req<S: Storage>(s: S, req: Request<Body>) -> BoxFut {
         "/v2/discovery:endpoints" => get_registration_v2(&s, req),
         _ => match RE.captures(uri.path()) {
             Some(caps) => match caps.get(1) {
-                Some(m) => return register_hosts(s, req, m.as_str()),
+                Some(m) => register_hosts(s, req, m.as_str()),
                 _ => res_404(),
             },
             _ => res_404(),

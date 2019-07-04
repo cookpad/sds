@@ -157,20 +157,18 @@ where
                             }
                         };
                         if h.expire_time >= now.as_secs() {
-                            return Ok(Some(h));
+                            Ok(Some(h))
                         } else {
-                            return Ok(None);
+                            Ok(None)
                         }
                     }
-                    None => return Ok(None),
+                    None => Ok(None),
                 }
             }
-            Err(e) => {
-                return Err(StorageError {
-                    kind: ErrorKind::ApiError,
-                    msg: format!("API Error in delete_item: {}", e.to_string()),
-                })
-            }
+            Err(e) => Err(StorageError {
+                kind: ErrorKind::ApiError,
+                msg: format!("API Error in delete_item: {}", e.to_string()),
+            }),
         }
     }
 
