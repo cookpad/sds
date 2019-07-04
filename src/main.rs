@@ -26,6 +26,7 @@ fn main() {
         table_name: table_name,
         ttl: ttl,
         dynamodb_client: dynamodb_client,
+        timeout: get_timeout(),
     };
     let c = Config {
         listen_port: listen_port,
@@ -54,4 +55,22 @@ where
             exit(1)
         }
     }
+}
+
+fn get_timeout() -> std::time::Duration {
+    const DEFAULT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+    std::env::var("DDB_TIMEOUT_SEC")
+        .ok()
+        .and_then(|timeout_str| match timeout_str.parse() {
+            Ok(timeout_sec) => {
+                log::info!("set DynamoDB API timeout to {}", timeout_sec);
+                Some(std::time::Duration::from_secs(timeout_sec))
+            }
+            Err(e) => {
+                log::warn!("unable to parse DDB_TIMEOUT_SEC into integer: {}", e);
+                None
+            }
+        })
+        .unwrap_or(DEFAULT_TIMEOUT)
 }

@@ -39,6 +39,7 @@ pub struct StorageImpl<DynamoDb> {
     pub table_name: String,
     pub ttl: u64,
     pub dynamodb_client: DynamoDb,
+    pub timeout: std::time::Duration,
 }
 
 impl<DynamoDb> Storage for StorageImpl<DynamoDb>
@@ -66,7 +67,12 @@ where
             let tn = table_name.to_owned();
             let mut query_input = build_query_input(tn, &name);
             query_input.exclusive_start_key = last_evaluated_key;
-            let res = match self.dynamodb_client.query(query_input).sync() {
+            let res = match self
+                .dynamodb_client
+                .query(query_input)
+                .with_timeout(self.timeout)
+                .sync()
+            {
                 Ok(res) => res,
                 Err(e) => {
                     return Err(StorageError {
@@ -108,6 +114,7 @@ where
         if let Err(e) = self
             .dynamodb_client
             .put_item(build_put_item_input(table_name, &name, host))
+            .with_timeout(self.timeout)
             .sync()
         {
             Err(StorageError {
@@ -139,6 +146,7 @@ where
                 ip.to_owned(),
                 port.clone(),
             ))
+            .with_timeout(self.timeout)
             .sync()
         {
             Ok(out) => {
