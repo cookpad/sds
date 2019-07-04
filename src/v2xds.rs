@@ -5,7 +5,7 @@ use serde_json;
 
 use super::types::Host;
 
-pub const EDS_TYPE_URL: &'static str = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment";
+pub const EDS_TYPE_URL: &str = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DiscoveryRequest {
