@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use log::info;
 use rusoto_dynamodb::{AttributeValue, DeleteItemInput, PutItemInput, QueryInput};
 
-use super::types::{Host, ServiceName, Storage, Tag};
+use super::types::{Host, Storage, Tag};
 
 #[derive(Debug, Clone)]
 enum ErrorKind {
@@ -48,7 +48,7 @@ where
 {
     type E = StorageError;
 
-    fn query_items(&self, name: &ServiceName) -> Result<Vec<Host>, Self::E> {
+    fn query_items(&self, name: &str) -> Result<Vec<Host>, Self::E> {
         let mut hosts = Vec::new();
         let mut last_evaluated_key: Option<HashMap<String, AttributeValue>> = None;
         let table_name = self.table_name.to_owned();
@@ -106,7 +106,7 @@ where
         Ok(hosts)
     }
 
-    fn store_item(&self, name: ServiceName, host: Host) -> Result<(), Self::E> {
+    fn store_item(&self, name: &str, host: Host) -> Result<(), Self::E> {
         let table_name = self.table_name.to_owned();
         let ip = host.ip_address.to_owned();
         let port = host.port.clone();
@@ -130,22 +130,12 @@ where
         }
     }
 
-    fn delete_item(
-        &self,
-        name: ServiceName,
-        ip: String,
-        port: u64,
-    ) -> Result<Option<Host>, Self::E> {
+    fn delete_item(&self, name: &str, ip: String, port: u64) -> Result<Option<Host>, Self::E> {
         let table_name = self.table_name.to_owned();
 
         match self
             .dynamodb_client
-            .delete_item(build_delete_item_input(
-                table_name,
-                &name,
-                &ip,
-                port.clone(),
-            ))
+            .delete_item(build_delete_item_input(table_name, name, &ip, port.clone()))
             .with_timeout(self.timeout)
             .sync()
         {
@@ -156,7 +146,7 @@ where
                 );
                 match out.attributes {
                     Some(m) => {
-                        let h = convert_ddb_host_to_domain_host(&name, m)?;
+                        let h = convert_ddb_host_to_domain_host(name, m)?;
                         let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
                             Ok(v) => v,
                             Err(_) => {
@@ -189,7 +179,7 @@ where
     }
 }
 
-fn build_query_input(table_name: String, name: &ServiceName) -> QueryInput {
+fn build_query_input(table_name: String, name: &str) -> QueryInput {
     let mut attr_service: AttributeValue = Default::default();
     attr_service.s = Some(name.to_owned());
     let mut expression_attribute_values: HashMap<String, AttributeValue> = HashMap::new();
@@ -202,19 +192,14 @@ fn build_query_input(table_name: String, name: &ServiceName) -> QueryInput {
     query_input
 }
 
-fn build_put_item_input(table_name: String, name: &ServiceName, host: Host) -> PutItemInput {
+fn build_put_item_input(table_name: String, name: &str, host: Host) -> PutItemInput {
     let mut put_item_input: PutItemInput = Default::default();
     put_item_input.table_name = table_name;
     put_item_input.item = convert_domain_host_to_ddb_host(&name, host);
     put_item_input
 }
 
-fn build_delete_item_input(
-    table_name: String,
-    name: &ServiceName,
-    ip: &str,
-    port: u64,
-) -> DeleteItemInput {
+fn build_delete_item_input(table_name: String, name: &str, ip: &str, port: u64) -> DeleteItemInput {
     let mut delete_item_input: DeleteItemInput = Default::default();
     delete_item_input.table_name = table_name;
     let mut pk = HashMap::new();
@@ -226,10 +211,7 @@ fn build_delete_item_input(
     delete_item_input
 }
 
-fn convert_domain_host_to_ddb_host(
-    name: &ServiceName,
-    host: Host,
-) -> HashMap<String, AttributeValue> {
+fn convert_domain_host_to_ddb_host(name: &str, host: Host) -> HashMap<String, AttributeValue> {
     let mut map = HashMap::new();
     map.insert("service".to_owned(), build_string_attr(name.to_owned()));
     let ip_port = format!("{}:{}", host.ip_address, host.port);
@@ -275,7 +257,7 @@ fn build_string_attr(s: String) -> AttributeValue {
 }
 
 fn convert_ddb_host_to_domain_host(
-    name: &String,
+    name: &str,
     mut h: HashMap<String, AttributeValue>,
 ) -> Result<Host, StorageError> {
     let tag = convert_ddb_tags_to_domain_tag(extract_map(&mut h, "tags")?)?;
