@@ -89,10 +89,10 @@ fn route<S: Storage>(s: S, req: Request<Body>) -> BoxFut {
         req.method(),
         req.uri().to_owned().path()
     );
-    match req.method() {
-        &Method::GET => route_get_req(&s, req),
-        &Method::POST => route_post_req(s, req),
-        &Method::DELETE => route_delete_req(&s, req),
+    match *req.method() {
+        Method::GET => route_get_req(&s, req),
+        Method::POST => route_post_req(s, req),
+        Method::DELETE => route_delete_req(&s, req),
         _ => res_404(),
     }
 }
