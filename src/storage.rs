@@ -109,7 +109,7 @@ where
     fn store_item(&self, name: &str, host: Host) -> Result<(), Self::E> {
         let table_name = self.table_name.to_owned();
         let ip = host.ip_address.to_owned();
-        let port = host.port.clone();
+        let port = host.port;
 
         if let Err(e) = self
             .dynamodb_client
@@ -135,7 +135,7 @@ where
 
         match self
             .dynamodb_client
-            .delete_item(build_delete_item_input(table_name, name, &ip, port.clone()))
+            .delete_item(build_delete_item_input(table_name, name, &ip, port))
             .with_timeout(self.timeout)
             .sync()
         {
