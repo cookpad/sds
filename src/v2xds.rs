@@ -88,6 +88,7 @@ pub struct Metadata {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LbFilterMetadata {
     pub canary: bool,
+    pub revision: String,
 }
 
 pub fn hosts_to_locality_lb_endpoints(mut hosts: Vec<Host>) -> Vec<LocalityLbEndpoints> {
@@ -125,6 +126,7 @@ fn convert_host_to_le(h: Host) -> LbEndpoint {
         "envoy.lb".to_owned(),
         LbFilterMetadata {
             canary: h.tags.canary,
+            revision: h.revision,
         },
     );
 
