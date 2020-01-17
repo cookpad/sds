@@ -21,7 +21,7 @@ use super::v2xds::{
     EDS_TYPE_URL,
 };
 
-type BoxFut = Box<Future<Item = Response<Body>, Error = hyper::Error> + Send>;
+type BoxFut = Box<dyn Future<Item = Response<Body>, Error = hyper::Error> + Send>;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RegistrationParam {
