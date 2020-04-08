@@ -2,11 +2,13 @@ use serde_derive::{Deserialize, Serialize};
 use std::error;
 use std::fmt;
 
+#[async_trait::async_trait]
 pub trait Storage: Send + Sync + Clone + 'static {
     type E: fmt::Display + error::Error;
-    fn query_items(&self, name: &str) -> Result<Vec<Host>, Self::E>;
-    fn store_item(&self, name: &str, host: Host) -> Result<(), Self::E>;
-    fn delete_item(&self, name: &str, ip: String, port: u64) -> Result<Option<Host>, Self::E>;
+    async fn query_items(&self, name: &str) -> Result<Vec<Host>, Self::E>;
+    async fn store_item(&self, name: &str, host: Host) -> Result<(), Self::E>;
+    async fn delete_item(&self, name: &str, ip: String, port: u64)
+        -> Result<Option<Host>, Self::E>;
     fn ttl(&self) -> u64;
 }
 

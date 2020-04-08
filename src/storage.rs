@@ -39,16 +39,17 @@ pub struct StorageImpl<DynamoDb> {
     pub table_name: String,
     pub ttl: u64,
     pub dynamodb_client: DynamoDb,
-    pub timeout: std::time::Duration,
+    pub timeout: tokio::time::Duration,
 }
 
+#[async_trait::async_trait]
 impl<DynamoDb> Storage for StorageImpl<DynamoDb>
 where
     DynamoDb: rusoto_dynamodb::DynamoDb + Send + Sync + Clone + 'static,
 {
     type E = StorageError;
 
-    fn query_items(&self, name: &str) -> Result<Vec<Host>, Self::E> {
+    async fn query_items(&self, name: &str) -> Result<Vec<Host>, Self::E> {
         let mut hosts = Vec::new();
         let mut last_evaluated_key: Option<HashMap<String, AttributeValue>> = None;
         let table_name = self.table_name.to_owned();
@@ -67,20 +68,24 @@ where
             let tn = table_name.to_owned();
             let mut query_input = build_query_input(tn, &name);
             query_input.exclusive_start_key = last_evaluated_key;
-            let res = match self
-                .dynamodb_client
-                .query(query_input)
-                .with_timeout(self.timeout)
-                .sync()
-            {
-                Ok(res) => res,
-                Err(e) => {
-                    return Err(StorageError {
-                        kind: ErrorKind::Api,
-                        msg: format!("API Error in query: {}", e.to_string()),
-                    })
-                }
-            };
+            let res =
+                match tokio::time::timeout(self.timeout, self.dynamodb_client.query(query_input))
+                    .await
+                {
+                    Ok(Ok(res)) => res,
+                    Ok(Err(e)) => {
+                        return Err(StorageError {
+                            kind: ErrorKind::Api,
+                            msg: format!("API Error in query: {}", e.to_string()),
+                        })
+                    }
+                    Err(e) => {
+                        return Err(StorageError {
+                            kind: ErrorKind::Api,
+                            msg: format!("Query timed out: {}", e.to_string()),
+                        })
+                    }
+                };
             last_evaluated_key = res.last_evaluated_key;
             let items = res.items.expect("items of query result is missing");
             for h in items {
@@ -106,40 +111,52 @@ where
         Ok(hosts)
     }
 
-    fn store_item(&self, name: &str, host: Host) -> Result<(), Self::E> {
+    async fn store_item(&self, name: &str, host: Host) -> Result<(), Self::E> {
         let table_name = self.table_name.to_owned();
         let ip = host.ip_address.to_owned();
         let port = host.port;
 
-        if let Err(e) = self
-            .dynamodb_client
-            .put_item(build_put_item_input(table_name, &name, host))
-            .with_timeout(self.timeout)
-            .sync()
+        match tokio::time::timeout(
+            self.timeout,
+            self.dynamodb_client
+                .put_item(build_put_item_input(table_name, &name, host)),
+        )
+        .await
         {
-            Err(StorageError {
+            Ok(Ok(_)) => {
+                info!(
+                    "store_item(): succeed to store item: service={}, ip={}, port={}",
+                    name, ip, port
+                );
+                Ok(())
+            }
+            Ok(Err(e)) => Err(StorageError {
                 kind: ErrorKind::Api,
                 msg: format!("API Error in put_item: {}", e.to_string()),
-            })
-        } else {
-            info!(
-                "store_item(): succeed to store item: service={}, ip={}, port={}",
-                name, ip, port
-            );
-            Ok(())
+            }),
+            Err(e) => Err(StorageError {
+                kind: ErrorKind::Api,
+                msg: format!("put_item timed out: {}", e.to_string()),
+            }),
         }
     }
 
-    fn delete_item(&self, name: &str, ip: String, port: u64) -> Result<Option<Host>, Self::E> {
+    async fn delete_item(
+        &self,
+        name: &str,
+        ip: String,
+        port: u64,
+    ) -> Result<Option<Host>, Self::E> {
         let table_name = self.table_name.to_owned();
 
-        match self
-            .dynamodb_client
-            .delete_item(build_delete_item_input(table_name, name, &ip, port))
-            .with_timeout(self.timeout)
-            .sync()
+        match tokio::time::timeout(
+            self.timeout,
+            self.dynamodb_client
+                .delete_item(build_delete_item_input(table_name, name, &ip, port)),
+        )
+        .await
         {
-            Ok(out) => {
+            Ok(Ok(out)) => {
                 info!(
                     "delete_item(): succeed to delete_item item: service={}, ip={}, port={}",
                     name, ip, port
@@ -165,9 +182,13 @@ where
                     None => Ok(None),
                 }
             }
-            Err(e) => Err(StorageError {
+            Ok(Err(e)) => Err(StorageError {
                 kind: ErrorKind::Api,
                 msg: format!("API Error in delete_item: {}", e.to_string()),
+            }),
+            Err(e) => Err(StorageError {
+                kind: ErrorKind::Api,
+                msg: format!("delete_item timed out: {}", e.to_string()),
             }),
         }
     }
