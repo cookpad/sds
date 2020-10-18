@@ -1,4 +1,4 @@
-FROM rust:1.42-stretch as builder
+FROM rust:1.47-buster as builder
 
 # Build deps
 RUN mkdir -p /build/src
@@ -12,7 +12,7 @@ RUN rm src/main.rs
 COPY src /build/src
 RUN cargo build --release --locked
 
-FROM debian:stretch-slim
+FROM debian:buster-slim
 RUN apt update && apt install -y libssl1.1 ca-certificates
 COPY --from=builder /build/target/release/sds /usr/local/bin/
 CMD /usr/local/bin/sds
