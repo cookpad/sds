@@ -3,6 +3,10 @@ sds
 
 Envoy's v1 Service Discovery Service API and v2 Endpoint Discovery Service API. In contrast of https://github.com/lyft/discovery, the sds allow users to serve multiple application instances of single service in single host instance (with single ip address).
 
+## Maintenance notice
+
+This project is no longer maintained.
+
 ## Endpoints
 ### v1 SDS
 `GET /v1/registration/:name/`
